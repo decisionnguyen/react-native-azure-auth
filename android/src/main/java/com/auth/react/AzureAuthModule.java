@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.os.Handler;
 import android.util.Base64;
 import androidx.browser.customtabs.CustomTabsIntent;
+import android.content.ActivityNotFoundException;
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Callback;
@@ -26,6 +27,7 @@ public class AzureAuthModule extends ReactContextBaseJavaModule implements Lifec
 
     private final ReactApplicationContext reactContext;
     private Callback callback;
+    private boolean closeOnLoad;
 
     public AzureAuthModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -50,16 +52,27 @@ public class AzureAuthModule extends ReactContextBaseJavaModule implements Lifec
         final Activity activity = getCurrentActivity();
 
         this.callback = callback;
+        this.closeOnLoad = closeOnLoad;
+
         if (activity != null) {
-            CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
-            CustomTabsIntent customTabsIntent = builder.build();
-            customTabsIntent.launchUrl(activity, Uri.parse(url));
+            try {
+                CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
+                CustomTabsIntent customTabsIntent = builder.build();
+                customTabsIntent.launchUrl(activity, Uri.parse(url));
+            } catch (ActivityNotFoundException e) {
+                // No chrome installed on device
+                startNewBrowserActivity(url);
+            }
         } else {
-            final Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            intent.setData(Uri.parse(url));
-            getReactApplicationContext().startActivity(intent);
+            startNewBrowserActivity(url);
         }
+    }
+
+    private void startNewBrowserActivity(String url) {
+        final Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.setData(Uri.parse(url));
+        getReactApplicationContext().startActivity(intent);
     }
 
     @ReactMethod
@@ -67,12 +80,13 @@ public class AzureAuthModule extends ReactContextBaseJavaModule implements Lifec
         final WritableMap parameters = Arguments.createMap();
         parameters.putString("state", this.generateRandomValue());
         parameters.putString("nonce", this.generateRandomValue());
+        parameters.putString("verifier", this.generateRandomValue());
         callback.invoke(parameters);
     }
-
+   
     @ReactMethod
     public void hide() {
-        // NO OP
+        AzureAuthModule.this.callback = null;
     }
 
     private String getBase64String(byte[] source) {
@@ -93,10 +107,14 @@ public class AzureAuthModule extends ReactContextBaseJavaModule implements Lifec
             public void run() {
                 Callback cb = AzureAuthModule.this.callback;
                 if (cb != null) {
-                    final WritableMap error = Arguments.createMap();
-                    error.putString("error", "a0.session.user_cancelled");
-                    error.putString("error_description", "User cancelled the Auth");
-                    cb.invoke(error);
+                    if (AzureAuthModule.this.closeOnLoad) {
+                        cb.invoke();
+                    } else {
+                        final WritableMap error = Arguments.createMap();
+                        error.putString("error", "a0.session.user_cancelled");
+                        error.putString("error_description", "User cancelled the Auth");
+                        cb.invoke(error);
+                    }
                     AzureAuthModule.this.callback = null;
                 }
             }

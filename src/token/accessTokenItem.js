@@ -6,12 +6,12 @@ const DEFAULT_EXPIRATION_BUFFER = 300
 
 /**
  * Class represent acces token cache item
- * 
+ *
  * @namespace TokenCache.AccessTokenItem
- * 
- * @param {Object} tokenResponse 
- * @param {String} clientId 
- * 
+ *
+ * @param {Object} tokenResponse
+ * @param {String} clientId
+ *
  * @class AccessTokenItem
  * @extends BaseTokenItem
  * @memberof TokenCache
@@ -38,7 +38,12 @@ export default class AccessTokenItem extends BaseTokenItem{
     }
 
     static fromJson(objStr) {
-        let obj = Object.create(AccessTokenItem.prototype)
-        return Object.assign(obj, JSON.parse(objStr))
+        const rawObject = BaseTokenItem.rawObjectFromJson(objStr)
+        if (!rawObject || !rawObject['accessToken']) {
+            return null
+        }
+        const obj = Object.create(AccessTokenItem.prototype)
+        return Object.assign(obj, rawObject)
     }
+
 }
